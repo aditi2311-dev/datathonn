@@ -1,0 +1,1548 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "id": "7a428404",
+   "metadata": {
+    "_cell_guid": "b1076dfc-b9ad-4769-8c92-a6c4dae69d19",
+    "_uuid": "8f2839f25d086af736a60e9eeb907d3b93b6e0e5",
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:26:01.769397Z",
+     "iopub.status.busy": "2026-06-06T15:26:01.768994Z",
+     "iopub.status.idle": "2026-06-06T15:26:07.215270Z",
+     "shell.execute_reply": "2026-06-06T15:26:07.213761Z"
+    },
+    "papermill": {
+     "duration": 5.457362,
+     "end_time": "2026-06-06T15:26:07.218151+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:26:01.760789+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "!pip install lightgbm catboost -q"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "id": "b5ba3b8c",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:26:07.232569Z",
+     "iopub.status.busy": "2026-06-06T15:26:07.232181Z",
+     "iopub.status.idle": "2026-06-06T15:26:15.418301Z",
+     "shell.execute_reply": "2026-06-06T15:26:15.417294Z"
+    },
+    "papermill": {
+     "duration": 8.195645,
+     "end_time": "2026-06-06T15:26:15.420559+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:26:07.224914+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "import numpy as np\n",
+    "import pandas as pd\n",
+    "\n",
+    "from sklearn.model_selection import StratifiedKFold\n",
+    "from sklearn.metrics import average_precision_score\n",
+    "\n",
+    "from lightgbm import LGBMClassifier\n",
+    "from catboost import CatBoostClassifier\n",
+    "\n",
+    "import warnings\n",
+    "warnings.filterwarnings('ignore')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "id": "11d0f754",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:26:15.433242Z",
+     "iopub.status.busy": "2026-06-06T15:26:15.432576Z",
+     "iopub.status.idle": "2026-06-06T15:26:15.447427Z",
+     "shell.execute_reply": "2026-06-06T15:26:15.446282Z"
+    },
+    "papermill": {
+     "duration": 0.023398,
+     "end_time": "2026-06-06T15:26:15.449451+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:26:15.426053+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "/kaggle/input/datasets/saanviiii1/offside-football/sample_submission.csv\n",
+      "/kaggle/input/datasets/saanviiii1/offside-football/data_dictionary.csv\n",
+      "/kaggle/input/datasets/saanviiii1/offside-football/feature_catalog.csv\n",
+      "/kaggle/input/datasets/saanviiii1/offside-football/train.csv\n",
+      "/kaggle/input/datasets/saanviiii1/offside-football/test.csv\n",
+      "/kaggle/input/competitions/offside-data-thon/sample_submission.csv\n",
+      "/kaggle/input/competitions/offside-data-thon/data_dictionary.csv\n",
+      "/kaggle/input/competitions/offside-data-thon/feature_catalog.csv\n",
+      "/kaggle/input/competitions/offside-data-thon/train.csv\n",
+      "/kaggle/input/competitions/offside-data-thon/test.csv\n"
+     ]
+    }
+   ],
+   "source": [
+    "import os\n",
+    "\n",
+    "for dirname, _, filenames in os.walk('/kaggle/input'):\n",
+    "    for filename in filenames:\n",
+    "        print(os.path.join(dirname, filename))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "id": "1a858a68",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:26:15.462040Z",
+     "iopub.status.busy": "2026-06-06T15:26:15.461697Z",
+     "iopub.status.idle": "2026-06-06T15:26:39.872649Z",
+     "shell.execute_reply": "2026-06-06T15:26:39.871592Z"
+    },
+    "papermill": {
+     "duration": 24.419791,
+     "end_time": "2026-06-06T15:26:39.874764+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:26:15.454973+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "(1319813, 64)\n",
+      "(565635, 63)\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>appearance_id</th>\n",
+       "      <th>date</th>\n",
+       "      <th>season</th>\n",
+       "      <th>minutes_played</th>\n",
+       "      <th>yellow_cards</th>\n",
+       "      <th>red_cards</th>\n",
+       "      <th>disciplinary_points</th>\n",
+       "      <th>home_club_id</th>\n",
+       "      <th>away_club_id</th>\n",
+       "      <th>home_club_name</th>\n",
+       "      <th>...</th>\n",
+       "      <th>has_national_team_experience</th>\n",
+       "      <th>xG_to_xA_ratio</th>\n",
+       "      <th>finisher_flag</th>\n",
+       "      <th>creative_player_flag</th>\n",
+       "      <th>analytics_coverage_flag</th>\n",
+       "      <th>is_goalkeeper</th>\n",
+       "      <th>is_defender</th>\n",
+       "      <th>is_midfielder</th>\n",
+       "      <th>is_attacker</th>\n",
+       "      <th>name_y</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>2335635_20137</td>\n",
+       "      <td>2013-07-15</td>\n",
+       "      <td>2013</td>\n",
+       "      <td>90</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>6414</td>\n",
+       "      <td>2783</td>\n",
+       "      <td>Metalist Kharkiv (- 2016)</td>\n",
+       "      <td>...</td>\n",
+       "      <td>True</td>\n",
+       "      <td>0.362550</td>\n",
+       "      <td>False</td>\n",
+       "      <td>True</td>\n",
+       "      <td>True</td>\n",
+       "      <td>False</td>\n",
+       "      <td>False</td>\n",
+       "      <td>True</td>\n",
+       "      <td>False</td>\n",
+       "      <td>José Sosa</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>2654328_36235</td>\n",
+       "      <td>2016-03-07</td>\n",
+       "      <td>2015</td>\n",
+       "      <td>90</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>2700</td>\n",
+       "      <td>4128</td>\n",
+       "      <td>Anzhi Makhachkala ( -2022)</td>\n",
+       "      <td>...</td>\n",
+       "      <td>False</td>\n",
+       "      <td>0.454626</td>\n",
+       "      <td>False</td>\n",
+       "      <td>True</td>\n",
+       "      <td>True</td>\n",
+       "      <td>False</td>\n",
+       "      <td>True</td>\n",
+       "      <td>False</td>\n",
+       "      <td>False</td>\n",
+       "      <td>Petar Zanev</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>2</th>\n",
+       "      <td>4098806_1163778</td>\n",
+       "      <td>2024-03-03</td>\n",
+       "      <td>2023</td>\n",
+       "      <td>63</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>1096</td>\n",
+       "      <td>475</td>\n",
+       "      <td>Royal Antwerp Football Club</td>\n",
+       "      <td>...</td>\n",
+       "      <td>False</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>False</td>\n",
+       "      <td>False</td>\n",
+       "      <td>False</td>\n",
+       "      <td>False</td>\n",
+       "      <td>False</td>\n",
+       "      <td>False</td>\n",
+       "      <td>True</td>\n",
+       "      <td>Kahveh Zahiroleslam</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>3</th>\n",
+       "      <td>2700658_348863</td>\n",
+       "      <td>2016-08-28</td>\n",
+       "      <td>2016</td>\n",
+       "      <td>33</td>\n",
+       "      <td>2</td>\n",
+       "      <td>0</td>\n",
+       "      <td>2</td>\n",
+       "      <td>383</td>\n",
+       "      <td>202</td>\n",
+       "      <td>Eindhovense Voetbalvereniging Philips Sport Ve...</td>\n",
+       "      <td>...</td>\n",
+       "      <td>True</td>\n",
+       "      <td>0.569382</td>\n",
+       "      <td>False</td>\n",
+       "      <td>True</td>\n",
+       "      <td>True</td>\n",
+       "      <td>False</td>\n",
+       "      <td>False</td>\n",
+       "      <td>True</td>\n",
+       "      <td>False</td>\n",
+       "      <td>Juninho Bacuna</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>4</th>\n",
+       "      <td>3016404_240551</td>\n",
+       "      <td>2018-03-31</td>\n",
+       "      <td>2017</td>\n",
+       "      <td>65</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>0</td>\n",
+       "      <td>4128</td>\n",
+       "      <td>932</td>\n",
+       "      <td>Amkar Perm</td>\n",
+       "      <td>...</td>\n",
+       "      <td>False</td>\n",
+       "      <td>NaN</td>\n",
+       "      <td>False</td>\n",
+       "      <td>False</td>\n",
+       "      <td>False</td>\n",
+       "      <td>False</td>\n",
+       "      <td>False</td>\n",
+       "      <td>False</td>\n",
+       "      <td>True</td>\n",
+       "      <td>Aaron Olanare</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "<p>5 rows × 64 columns</p>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "     appearance_id        date  season  minutes_played  yellow_cards  \\\n",
+       "0    2335635_20137  2013-07-15    2013              90             0   \n",
+       "1    2654328_36235  2016-03-07    2015              90             0   \n",
+       "2  4098806_1163778  2024-03-03    2023              63             0   \n",
+       "3   2700658_348863  2016-08-28    2016              33             2   \n",
+       "4   3016404_240551  2018-03-31    2017              65             0   \n",
+       "\n",
+       "   red_cards  disciplinary_points  home_club_id  away_club_id  \\\n",
+       "0          0                    0          6414          2783   \n",
+       "1          0                    0          2700          4128   \n",
+       "2          0                    0          1096           475   \n",
+       "3          0                    2           383           202   \n",
+       "4          0                    0          4128           932   \n",
+       "\n",
+       "                                      home_club_name  ...  \\\n",
+       "0                          Metalist Kharkiv (- 2016)  ...   \n",
+       "1                         Anzhi Makhachkala ( -2022)  ...   \n",
+       "2                        Royal Antwerp Football Club  ...   \n",
+       "3  Eindhovense Voetbalvereniging Philips Sport Ve...  ...   \n",
+       "4                                         Amkar Perm  ...   \n",
+       "\n",
+       "  has_national_team_experience  xG_to_xA_ratio  finisher_flag  \\\n",
+       "0                         True        0.362550          False   \n",
+       "1                        False        0.454626          False   \n",
+       "2                        False             NaN          False   \n",
+       "3                         True        0.569382          False   \n",
+       "4                        False             NaN          False   \n",
+       "\n",
+       "  creative_player_flag  analytics_coverage_flag is_goalkeeper is_defender  \\\n",
+       "0                 True                     True         False       False   \n",
+       "1                 True                     True         False        True   \n",
+       "2                False                    False         False       False   \n",
+       "3                 True                     True         False       False   \n",
+       "4                False                    False         False       False   \n",
+       "\n",
+       "  is_midfielder is_attacker               name_y  \n",
+       "0          True       False            José Sosa  \n",
+       "1         False       False          Petar Zanev  \n",
+       "2         False        True  Kahveh Zahiroleslam  \n",
+       "3          True       False       Juninho Bacuna  \n",
+       "4         False        True        Aaron Olanare  \n",
+       "\n",
+       "[5 rows x 64 columns]"
+      ]
+     },
+     "execution_count": 4,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "train = pd.read_csv('/kaggle/input/datasets/saanviiii1/offside-football/train.csv')\n",
+    "test = pd.read_csv('/kaggle/input/datasets/saanviiii1/offside-football/test.csv')\n",
+    "\n",
+    "print(train.shape)\n",
+    "print(test.shape)\n",
+    "\n",
+    "train.head()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "id": "f86042a6",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:26:39.888527Z",
+     "iopub.status.busy": "2026-06-06T15:26:39.888146Z",
+     "iopub.status.idle": "2026-06-06T15:26:39.908351Z",
+     "shell.execute_reply": "2026-06-06T15:26:39.907610Z"
+    },
+    "papermill": {
+     "duration": 0.029317,
+     "end_time": "2026-06-06T15:26:39.910273+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:26:39.880956+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "scored_flag\n",
+       "False    1207131\n",
+       "True      112682\n",
+       "Name: count, dtype: int64"
+      ]
+     },
+     "execution_count": 5,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "train['scored_flag'].value_counts()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "id": "1dcd5223",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:26:39.924200Z",
+     "iopub.status.busy": "2026-06-06T15:26:39.923872Z",
+     "iopub.status.idle": "2026-06-06T15:26:39.939790Z",
+     "shell.execute_reply": "2026-06-06T15:26:39.938955Z"
+    },
+    "papermill": {
+     "duration": 0.025081,
+     "end_time": "2026-06-06T15:26:39.941609+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:26:39.916528+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "data": {
+      "text/plain": [
+       "scored_flag\n",
+       "False    0.914623\n",
+       "True     0.085377\n",
+       "Name: proportion, dtype: float64"
+      ]
+     },
+     "execution_count": 6,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "train['scored_flag'].value_counts(normalize=True)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "id": "67da6f9e",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:26:39.955285Z",
+     "iopub.status.busy": "2026-06-06T15:26:39.954912Z",
+     "iopub.status.idle": "2026-06-06T15:26:40.516848Z",
+     "shell.execute_reply": "2026-06-06T15:26:40.515842Z"
+    },
+    "papermill": {
+     "duration": 0.571358,
+     "end_time": "2026-06-06T15:26:40.519069+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:26:39.947711+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "TARGET = 'scored_flag'\n",
+    "\n",
+    "y = train[TARGET]\n",
+    "\n",
+    "X = train.drop(columns=[TARGET])\n",
+    "\n",
+    "X_test = test.copy()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "id": "e54bb718",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:26:40.532988Z",
+     "iopub.status.busy": "2026-06-06T15:26:40.532648Z",
+     "iopub.status.idle": "2026-06-06T15:26:41.122114Z",
+     "shell.execute_reply": "2026-06-06T15:26:41.121343Z"
+    },
+    "papermill": {
+     "duration": 0.599063,
+     "end_time": "2026-06-06T15:26:41.124283+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:26:40.525220+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "drop_cols = [\n",
+    "    'appearance_id',\n",
+    "    'name_x',\n",
+    "    'name_y',\n",
+    "    'stadium',\n",
+    "    'referee',\n",
+    "    'home_club_name',\n",
+    "    'away_club_name'\n",
+    "]\n",
+    "\n",
+    "drop_cols = [c for c in drop_cols if c in X.columns]\n",
+    "\n",
+    "X = X.drop(columns=drop_cols)\n",
+    "X_test = X_test.drop(columns=drop_cols)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "id": "f6d6b6af",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:26:41.138305Z",
+     "iopub.status.busy": "2026-06-06T15:26:41.137985Z",
+     "iopub.status.idle": "2026-06-06T15:26:41.264643Z",
+     "shell.execute_reply": "2026-06-06T15:26:41.263556Z"
+    },
+    "papermill": {
+     "duration": 0.136185,
+     "end_time": "2026-06-06T15:26:41.266597+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:26:41.130412+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "['date', 'home_away', 'country_name', 'competition_type', 'confederation', 'foot', 'position', 'sub_position', 'country_of_citizenship', 'has_understat', 'market_value_tier', 'age_bucket', 'analytics_coverage_flag']\n"
+     ]
+    }
+   ],
+   "source": [
+    "cat_cols = X.select_dtypes(include=['object']).columns.tolist()\n",
+    "\n",
+    "print(cat_cols)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "id": "385019ec",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:26:41.280284Z",
+     "iopub.status.busy": "2026-06-06T15:26:41.279948Z",
+     "iopub.status.idle": "2026-06-06T15:26:42.540640Z",
+     "shell.execute_reply": "2026-06-06T15:26:42.539780Z"
+    },
+    "papermill": {
+     "duration": 1.270294,
+     "end_time": "2026-06-06T15:26:42.542894+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:26:41.272600+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "num_cols = X.select_dtypes(exclude=['object']).columns\n",
+    "\n",
+    "for col in num_cols:\n",
+    "    median = X[col].median()\n",
+    "\n",
+    "    X[col] = X[col].fillna(median)\n",
+    "    X_test[col] = X_test[col].fillna(median)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "id": "ad543e8a",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:26:42.557324Z",
+     "iopub.status.busy": "2026-06-06T15:26:42.556595Z",
+     "iopub.status.idle": "2026-06-06T15:26:44.290701Z",
+     "shell.execute_reply": "2026-06-06T15:26:44.289528Z"
+    },
+    "papermill": {
+     "duration": 1.743879,
+     "end_time": "2026-06-06T15:26:44.292996+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:26:42.549117+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "for col in cat_cols:\n",
+    "    X[col] = X[col].fillna(\"Unknown\")\n",
+    "    X_test[col] = X_test[col].fillna(\"Unknown\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 12,
+   "id": "04cc67e3",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:26:44.307288Z",
+     "iopub.status.busy": "2026-06-06T15:26:44.306902Z",
+     "iopub.status.idle": "2026-06-06T15:26:46.520346Z",
+     "shell.execute_reply": "2026-06-06T15:26:46.519504Z"
+    },
+    "papermill": {
+     "duration": 2.223486,
+     "end_time": "2026-06-06T15:26:46.522607+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:26:44.299121+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "cat_cols = X.select_dtypes(include=['object']).columns.tolist()\n",
+    "\n",
+    "for col in cat_cols:\n",
+    "    X[col] = X[col].astype('category')\n",
+    "    X_test[col] = X_test[col].astype('category')"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 13,
+   "id": "a930042c",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:26:46.536703Z",
+     "iopub.status.busy": "2026-06-06T15:26:46.535811Z",
+     "iopub.status.idle": "2026-06-06T15:26:46.981375Z",
+     "shell.execute_reply": "2026-06-06T15:26:46.980307Z"
+    },
+    "papermill": {
+     "duration": 0.455063,
+     "end_time": "2026-06-06T15:26:46.983697+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:26:46.528634+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "X['date'] = pd.to_datetime(X['date'])\n",
+    "X_test['date'] = pd.to_datetime(X_test['date'])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 14,
+   "id": "948790a0",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:26:46.998187Z",
+     "iopub.status.busy": "2026-06-06T15:26:46.997496Z",
+     "iopub.status.idle": "2026-06-06T15:26:47.227424Z",
+     "shell.execute_reply": "2026-06-06T15:26:47.226491Z"
+    },
+    "papermill": {
+     "duration": 0.239829,
+     "end_time": "2026-06-06T15:26:47.229746+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:26:46.989917+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "X['year'] = X['date'].dt.year\n",
+    "X['month'] = X['date'].dt.month\n",
+    "\n",
+    "X_test['year'] = X_test['date'].dt.year\n",
+    "X_test['month'] = X_test['date'].dt.month"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 15,
+   "id": "8eb1e474",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:26:47.243569Z",
+     "iopub.status.busy": "2026-06-06T15:26:47.243125Z",
+     "iopub.status.idle": "2026-06-06T15:26:47.549702Z",
+     "shell.execute_reply": "2026-06-06T15:26:47.548652Z"
+    },
+    "papermill": {
+     "duration": 0.316264,
+     "end_time": "2026-06-06T15:26:47.551995+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:26:47.235731+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "X.drop('date', axis=1, inplace=True)\n",
+    "X_test.drop('date', axis=1, inplace=True)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 16,
+   "id": "8849752d",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:26:47.565704Z",
+     "iopub.status.busy": "2026-06-06T15:26:47.565349Z",
+     "iopub.status.idle": "2026-06-06T15:26:47.573420Z",
+     "shell.execute_reply": "2026-06-06T15:26:47.572658Z"
+    },
+    "papermill": {
+     "duration": 0.017465,
+     "end_time": "2026-06-06T15:26:47.575554+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:26:47.558089+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "cat_cols = X.select_dtypes(include=['category', 'object']).columns.tolist()\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 17,
+   "id": "758cbba3",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:26:47.589690Z",
+     "iopub.status.busy": "2026-06-06T15:26:47.589320Z",
+     "iopub.status.idle": "2026-06-06T15:26:47.594722Z",
+     "shell.execute_reply": "2026-06-06T15:26:47.593434Z"
+    },
+    "papermill": {
+     "duration": 0.014814,
+     "end_time": "2026-06-06T15:26:47.596783+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:26:47.581969+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "['home_away', 'country_name', 'competition_type', 'confederation', 'foot', 'position', 'sub_position', 'country_of_citizenship', 'has_understat', 'market_value_tier', 'age_bucket', 'analytics_coverage_flag']\n"
+     ]
+    }
+   ],
+   "source": [
+    "print(cat_cols)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 18,
+   "id": "8d1c21cc",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:26:47.610822Z",
+     "iopub.status.busy": "2026-06-06T15:26:47.610396Z",
+     "iopub.status.idle": "2026-06-06T15:26:47.631171Z",
+     "shell.execute_reply": "2026-06-06T15:26:47.630184Z"
+    },
+    "papermill": {
+     "duration": 0.030442,
+     "end_time": "2026-06-06T15:26:47.633510+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:26:47.603068+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "X['attack_index'] = (\n",
+    "    X['avg_xG']\n",
+    "    + X['avg_npxG']\n",
+    "    + X['avg_shots'] * 0.05\n",
+    ")\n",
+    "\n",
+    "X_test['attack_index'] = (\n",
+    "    X_test['avg_xG']\n",
+    "    + X_test['avg_npxG']\n",
+    "    + X_test['avg_shots'] * 0.05\n",
+    ")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 19,
+   "id": "89fb41e3",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:26:47.648970Z",
+     "iopub.status.busy": "2026-06-06T15:26:47.648080Z",
+     "iopub.status.idle": "2026-06-06T15:26:47.663980Z",
+     "shell.execute_reply": "2026-06-06T15:26:47.662953Z"
+    },
+    "papermill": {
+     "duration": 0.026534,
+     "end_time": "2026-06-06T15:26:47.666161+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:26:47.639627+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "X['creativity_index'] = (\n",
+    "    X['avg_xA']\n",
+    "    + X['avg_key_passes'] * 0.05\n",
+    ")\n",
+    "\n",
+    "X_test['creativity_index'] = (\n",
+    "    X_test['avg_xA']\n",
+    "    + X_test['avg_key_passes'] * 0.05\n",
+    ")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 20,
+   "id": "04b3258a",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:26:47.679998Z",
+     "iopub.status.busy": "2026-06-06T15:26:47.679664Z",
+     "iopub.status.idle": "2026-06-06T15:26:47.692780Z",
+     "shell.execute_reply": "2026-06-06T15:26:47.691546Z"
+    },
+    "papermill": {
+     "duration": 0.022622,
+     "end_time": "2026-06-06T15:26:47.695011+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:26:47.672389+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "X['goal_threat'] = (\n",
+    "    X['avg_xG']\n",
+    "    * X['minutes_ratio']\n",
+    ")\n",
+    "\n",
+    "X_test['goal_threat'] = (\n",
+    "    X_test['avg_xG']\n",
+    "    * X_test['minutes_ratio']\n",
+    ")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 21,
+   "id": "5e0f2a2e",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:26:47.708944Z",
+     "iopub.status.busy": "2026-06-06T15:26:47.708609Z",
+     "iopub.status.idle": "2026-06-06T15:26:47.721360Z",
+     "shell.execute_reply": "2026-06-06T15:26:47.720435Z"
+    },
+    "papermill": {
+     "duration": 0.022456,
+     "end_time": "2026-06-06T15:26:47.723607+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:26:47.701151+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "X['value_xg'] = (\n",
+    "    X['log_market_value']\n",
+    "    * X['avg_xG']\n",
+    ")\n",
+    "\n",
+    "X_test['value_xg'] = (\n",
+    "    X_test['log_market_value']\n",
+    "    * X_test['avg_xG']\n",
+    ")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 22,
+   "id": "05ec561e",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:26:47.737653Z",
+     "iopub.status.busy": "2026-06-06T15:26:47.737311Z",
+     "iopub.status.idle": "2026-06-06T15:26:47.741906Z",
+     "shell.execute_reply": "2026-06-06T15:26:47.740901Z"
+    },
+    "papermill": {
+     "duration": 0.014287,
+     "end_time": "2026-06-06T15:26:47.744029+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:26:47.729742+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [],
+   "source": [
+    "folds = StratifiedKFold(\n",
+    "    n_splits=5,\n",
+    "    shuffle=True,\n",
+    "    random_state=42\n",
+    ")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 23,
+   "id": "395a61e2",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:26:47.758198Z",
+     "iopub.status.busy": "2026-06-06T15:26:47.757854Z",
+     "iopub.status.idle": "2026-06-06T15:26:48.060669Z",
+     "shell.execute_reply": "2026-06-06T15:26:48.059255Z"
+    },
+    "papermill": {
+     "duration": 0.312661,
+     "end_time": "2026-06-06T15:26:48.062821+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:26:47.750160+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "country_of_citizenship removed\n",
+      "(1319813, 60)\n",
+      "(565635, 60)\n"
+     ]
+    }
+   ],
+   "source": [
+    "X = X.drop(columns=['country_of_citizenship'])\n",
+    "X_test = X_test.drop(columns=['country_of_citizenship'])\n",
+    "\n",
+    "print(\"country_of_citizenship removed\")\n",
+    "print(X.shape)\n",
+    "print(X_test.shape)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 24,
+   "id": "9be24d9c",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:26:48.077264Z",
+     "iopub.status.busy": "2026-06-06T15:26:48.076903Z",
+     "iopub.status.idle": "2026-06-06T15:56:51.383002Z",
+     "shell.execute_reply": "2026-06-06T15:56:51.381835Z"
+    },
+    "papermill": {
+     "duration": 1803.322289,
+     "end_time": "2026-06-06T15:56:51.391441+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:26:48.069152+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Fold 1\n",
+      "[LightGBM] [Info] Number of positive: 90146, number of negative: 965704\n",
+      "[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.211848 seconds.\n",
+      "You can set `force_row_wise=true` to remove the overhead.\n",
+      "And if memory is not enough, you can set `force_col_wise=true`.\n",
+      "[LightGBM] [Info] Total Bins 6073\n",
+      "[LightGBM] [Info] Number of data points in the train set: 1055850, number of used features: 60\n",
+      "[LightGBM] [Info] [binary:BoostFromScore]: pavg=0.085378 -> initscore=-2.371427\n",
+      "[LightGBM] [Info] Start training from score -2.371427\n",
+      "AP = 0.4217160443701742\n",
+      "Fold 2\n",
+      "[LightGBM] [Info] Number of positive: 90145, number of negative: 965705\n",
+      "[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.207596 seconds.\n",
+      "You can set `force_row_wise=true` to remove the overhead.\n",
+      "And if memory is not enough, you can set `force_col_wise=true`.\n",
+      "[LightGBM] [Info] Total Bins 6074\n",
+      "[LightGBM] [Info] Number of data points in the train set: 1055850, number of used features: 60\n",
+      "[LightGBM] [Info] [binary:BoostFromScore]: pavg=0.085377 -> initscore=-2.371439\n",
+      "[LightGBM] [Info] Start training from score -2.371439\n",
+      "AP = 0.4231030119183317\n",
+      "Fold 3\n",
+      "[LightGBM] [Info] Number of positive: 90145, number of negative: 965705\n",
+      "[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.204984 seconds.\n",
+      "You can set `force_row_wise=true` to remove the overhead.\n",
+      "And if memory is not enough, you can set `force_col_wise=true`.\n",
+      "[LightGBM] [Info] Total Bins 6083\n",
+      "[LightGBM] [Info] Number of data points in the train set: 1055850, number of used features: 60\n",
+      "[LightGBM] [Info] [binary:BoostFromScore]: pavg=0.085377 -> initscore=-2.371439\n",
+      "[LightGBM] [Info] Start training from score -2.371439\n",
+      "AP = 0.42133262453020226\n",
+      "Fold 4\n",
+      "[LightGBM] [Info] Number of positive: 90146, number of negative: 965705\n",
+      "[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.204072 seconds.\n",
+      "You can set `force_row_wise=true` to remove the overhead.\n",
+      "And if memory is not enough, you can set `force_col_wise=true`.\n",
+      "[LightGBM] [Info] Total Bins 6084\n",
+      "[LightGBM] [Info] Number of data points in the train set: 1055851, number of used features: 60\n",
+      "[LightGBM] [Info] [binary:BoostFromScore]: pavg=0.085378 -> initscore=-2.371428\n",
+      "[LightGBM] [Info] Start training from score -2.371428\n",
+      "AP = 0.4246295373136789\n",
+      "Fold 5\n",
+      "[LightGBM] [Info] Number of positive: 90146, number of negative: 965705\n",
+      "[LightGBM] [Info] Auto-choosing row-wise multi-threading, the overhead of testing was 0.210198 seconds.\n",
+      "You can set `force_row_wise=true` to remove the overhead.\n",
+      "And if memory is not enough, you can set `force_col_wise=true`.\n",
+      "[LightGBM] [Info] Total Bins 6091\n",
+      "[LightGBM] [Info] Number of data points in the train set: 1055851, number of used features: 60\n",
+      "[LightGBM] [Info] [binary:BoostFromScore]: pavg=0.085378 -> initscore=-2.371428\n",
+      "[LightGBM] [Info] Start training from score -2.371428\n",
+      "AP = 0.4178464068470775\n"
+     ]
+    }
+   ],
+   "source": [
+    "oof = np.zeros(len(X))\n",
+    "preds = np.zeros(len(X_test))\n",
+    "\n",
+    "for fold, (tr_idx, val_idx) in enumerate(folds.split(X, y)):\n",
+    "\n",
+    "    print(f\"Fold {fold+1}\")\n",
+    "\n",
+    "    X_train = X.iloc[tr_idx]\n",
+    "    X_valid = X.iloc[val_idx]\n",
+    "\n",
+    "    y_train = y.iloc[tr_idx]\n",
+    "    y_valid = y.iloc[val_idx]\n",
+    "\n",
+    "    model = LGBMClassifier(\n",
+    "    objective='binary',\n",
+    "    metric='average_precision',\n",
+    "    n_estimators=2000,\n",
+    "    learning_rate=0.02,\n",
+    "    num_leaves=127,\n",
+    "    min_child_samples=20,\n",
+    "    subsample=0.8,\n",
+    "    colsample_bytree=0.8,\n",
+    "    random_state=42\n",
+    ")\n",
+    "\n",
+    "    model.fit(\n",
+    "    X_train,\n",
+    "    y_train\n",
+    ")\n",
+    "\n",
+    "    val_pred = model.predict_proba(X_valid)[:,1]\n",
+    "\n",
+    "    oof[val_idx] = val_pred\n",
+    "\n",
+    "    preds += model.predict_proba(X_test)[:,1] / 5\n",
+    "\n",
+    "    score = average_precision_score(\n",
+    "        y_valid,\n",
+    "        val_pred\n",
+    "    )\n",
+    "\n",
+    "    print(\"AP =\", score)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 25,
+   "id": "d7c764f3",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:56:51.407228Z",
+     "iopub.status.busy": "2026-06-06T15:56:51.406854Z",
+     "iopub.status.idle": "2026-06-06T15:56:51.841252Z",
+     "shell.execute_reply": "2026-06-06T15:56:51.840018Z"
+    },
+    "papermill": {
+     "duration": 0.445198,
+     "end_time": "2026-06-06T15:56:51.843640+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:56:51.398442+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Final CV AP = 0.4216963763929598\n"
+     ]
+    }
+   ],
+   "source": [
+    "cv_score = average_precision_score(\n",
+    "    y,\n",
+    "    oof\n",
+    ")\n",
+    "\n",
+    "print(\"Final CV AP =\", cv_score)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 26,
+   "id": "c2ba6fbb",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:56:51.859243Z",
+     "iopub.status.busy": "2026-06-06T15:56:51.858936Z",
+     "iopub.status.idle": "2026-06-06T15:56:51.864488Z",
+     "shell.execute_reply": "2026-06-06T15:56:51.863494Z"
+    },
+    "papermill": {
+     "duration": 0.015966,
+     "end_time": "2026-06-06T15:56:51.866571+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:56:51.850605+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "(565635,)\n",
+      "[3.87078828e-04 4.10191551e-01 8.86379525e-02 3.34115854e-01\n",
+      " 7.09138017e-02 2.39988730e-01 7.75963903e-04 3.28224787e-01\n",
+      " 5.99042817e-02 7.45910033e-04]\n"
+     ]
+    }
+   ],
+   "source": [
+    "print(preds.shape)\n",
+    "print(preds[:10])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 27,
+   "id": "706c725e",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:56:51.882674Z",
+     "iopub.status.busy": "2026-06-06T15:56:51.881891Z",
+     "iopub.status.idle": "2026-06-06T15:56:51.891927Z",
+     "shell.execute_reply": "2026-06-06T15:56:51.890673Z"
+    },
+    "papermill": {
+     "duration": 0.020534,
+     "end_time": "2026-06-06T15:56:51.894057+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:56:51.873523+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "3.1870076188412617e-06 0.9737470531005601 0.08463018512412182\n",
+      "1.7146183319994656e-06 0.9808533074708271 0.08444650700973574\n"
+     ]
+    }
+   ],
+   "source": [
+    "print(preds.min(), preds.max(), preds.mean())\n",
+    "print(oof.min(), oof.max(), oof.mean())"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 28,
+   "id": "2d132ab2",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:56:51.910125Z",
+     "iopub.status.busy": "2026-06-06T15:56:51.909783Z",
+     "iopub.status.idle": "2026-06-06T15:56:51.914566Z",
+     "shell.execute_reply": "2026-06-06T15:56:51.913622Z"
+    },
+    "papermill": {
+     "duration": 0.015699,
+     "end_time": "2026-06-06T15:56:51.916817+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:56:51.901118+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "0.4216963763929598\n"
+     ]
+    }
+   ],
+   "source": [
+    "print(cv_score)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 29,
+   "id": "aae96cc4",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:56:51.933227Z",
+     "iopub.status.busy": "2026-06-06T15:56:51.932878Z",
+     "iopub.status.idle": "2026-06-06T15:56:51.938133Z",
+     "shell.execute_reply": "2026-06-06T15:56:51.936989Z"
+    },
+    "papermill": {
+     "duration": 0.015694,
+     "end_time": "2026-06-06T15:56:51.940013+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:56:51.924319+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "<class 'lightgbm.sklearn.LGBMClassifier'>\n"
+     ]
+    }
+   ],
+   "source": [
+    "print(type(model))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 30,
+   "id": "59698b1f",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:56:51.956402Z",
+     "iopub.status.busy": "2026-06-06T15:56:51.956041Z",
+     "iopub.status.idle": "2026-06-06T15:56:51.983048Z",
+     "shell.execute_reply": "2026-06-06T15:56:51.981777Z"
+    },
+    "papermill": {
+     "duration": 0.038118,
+     "end_time": "2026-06-06T15:56:51.985271+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:56:51.947153+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "/kaggle/input/datasets/saanviiii1/offside-football/sample_submission.csv\n",
+      "/kaggle/input/competitions/offside-data-thon/sample_submission.csv\n"
+     ]
+    }
+   ],
+   "source": [
+    "import os\n",
+    "\n",
+    "for dirname, _, filenames in os.walk('/kaggle/input'):\n",
+    "    for filename in filenames:\n",
+    "        if 'submission' in filename.lower():\n",
+    "            print(os.path.join(dirname, filename))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 31,
+   "id": "a9cd6a3d",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:56:52.002191Z",
+     "iopub.status.busy": "2026-06-06T15:56:52.001311Z",
+     "iopub.status.idle": "2026-06-06T15:56:52.419558Z",
+     "shell.execute_reply": "2026-06-06T15:56:52.418513Z"
+    },
+    "papermill": {
+     "duration": 0.428967,
+     "end_time": "2026-06-06T15:56:52.421651+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:56:51.992684+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "    appearance_id  scored_flag\n",
+      "0  3598087_288233          0.5\n",
+      "1  2577964_171424          0.5\n",
+      "2  4676659_855731          0.5\n",
+      "3  3201275_468198          0.5\n",
+      "4  4103610_324804          0.5\n",
+      "Index(['appearance_id', 'scored_flag'], dtype='object')\n",
+      "(565635, 2)\n"
+     ]
+    }
+   ],
+   "source": [
+    "sample = pd.read_csv('/kaggle/input/competitions/offside-data-thon/sample_submission.csv')\n",
+    "\n",
+    "print(sample.head())\n",
+    "print(sample.columns)\n",
+    "print(sample.shape)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 32,
+   "id": "3630ef79",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:56:52.437671Z",
+     "iopub.status.busy": "2026-06-06T15:56:52.437305Z",
+     "iopub.status.idle": "2026-06-06T15:56:54.190893Z",
+     "shell.execute_reply": "2026-06-06T15:56:54.189739Z"
+    },
+    "papermill": {
+     "duration": 1.764199,
+     "end_time": "2026-06-06T15:56:54.193072+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:56:52.428873+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Submission file created!\n"
+     ]
+    }
+   ],
+   "source": [
+    "sample['scored_flag'] = preds\n",
+    "\n",
+    "sample.to_csv('submission_V3.csv', index=False)\n",
+    "\n",
+    "print(\"Submission file created!\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 33,
+   "id": "9553214a",
+   "metadata": {
+    "execution": {
+     "iopub.execute_input": "2026-06-06T15:56:54.210197Z",
+     "iopub.status.busy": "2026-06-06T15:56:54.209154Z",
+     "iopub.status.idle": "2026-06-06T15:56:54.671512Z",
+     "shell.execute_reply": "2026-06-06T15:56:54.670540Z"
+    },
+    "papermill": {
+     "duration": 0.472839,
+     "end_time": "2026-06-06T15:56:54.673284+00:00",
+     "exception": false,
+     "start_time": "2026-06-06T15:56:54.200445+00:00",
+     "status": "completed"
+    },
+    "tags": []
+   },
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "(565635, 2)\n"
+     ]
+    },
+    {
+     "data": {
+      "text/html": [
+       "<div>\n",
+       "<style scoped>\n",
+       "    .dataframe tbody tr th:only-of-type {\n",
+       "        vertical-align: middle;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe tbody tr th {\n",
+       "        vertical-align: top;\n",
+       "    }\n",
+       "\n",
+       "    .dataframe thead th {\n",
+       "        text-align: right;\n",
+       "    }\n",
+       "</style>\n",
+       "<table border=\"1\" class=\"dataframe\">\n",
+       "  <thead>\n",
+       "    <tr style=\"text-align: right;\">\n",
+       "      <th></th>\n",
+       "      <th>appearance_id</th>\n",
+       "      <th>scored_flag</th>\n",
+       "    </tr>\n",
+       "  </thead>\n",
+       "  <tbody>\n",
+       "    <tr>\n",
+       "      <th>0</th>\n",
+       "      <td>3598087_288233</td>\n",
+       "      <td>0.000387</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>1</th>\n",
+       "      <td>2577964_171424</td>\n",
+       "      <td>0.410192</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>2</th>\n",
+       "      <td>4676659_855731</td>\n",
+       "      <td>0.088638</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>3</th>\n",
+       "      <td>3201275_468198</td>\n",
+       "      <td>0.334116</td>\n",
+       "    </tr>\n",
+       "    <tr>\n",
+       "      <th>4</th>\n",
+       "      <td>4103610_324804</td>\n",
+       "      <td>0.070914</td>\n",
+       "    </tr>\n",
+       "  </tbody>\n",
+       "</table>\n",
+       "</div>"
+      ],
+      "text/plain": [
+       "    appearance_id  scored_flag\n",
+       "0  3598087_288233     0.000387\n",
+       "1  2577964_171424     0.410192\n",
+       "2  4676659_855731     0.088638\n",
+       "3  3201275_468198     0.334116\n",
+       "4  4103610_324804     0.070914"
+      ]
+     },
+     "execution_count": 33,
+     "metadata": {},
+     "output_type": "execute_result"
+    }
+   ],
+   "source": [
+    "submission = pd.read_csv('submission_V3.csv')\n",
+    "\n",
+    "print(submission.shape)\n",
+    "submission.head()"
+   ]
+  }
+ ],
+ "metadata": {
+  "kaggle": {
+   "accelerator": "none",
+   "dataSources": [],
+   "dockerImageVersionId": 28755,
+   "isGpuEnabled": false,
+   "isInternetEnabled": false,
+   "language": "python",
+   "sourceType": "notebook"
+  },
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.12.13"
+  },
+  "papermill": {
+   "default_parameters": {},
+   "duration": 1857.118951,
+   "end_time": "2026-06-06T15:56:55.804807+00:00",
+   "environment_variables": {},
+   "exception": null,
+   "input_path": "__notebook__.ipynb",
+   "output_path": "__notebook__.ipynb",
+   "parameters": {},
+   "start_time": "2026-06-06T15:25:58.685856+00:00",
+   "version": "2.7.0"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
